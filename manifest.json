@@ -1,0 +1,15 @@
+{
+  "name": "باشگاه من",
+  "short_name": "باشگاه",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#eab308",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2964/2964094.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
