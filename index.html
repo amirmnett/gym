@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>مدیریت باشگاه</title>
+    
+    <!-- اتصال فایل مانیفست برای نصب اپلیکیشن -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#eab308">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://v1.fontapi.ir/css/Vazir');
+        body { font-family: 'Vazir', sans-serif; touch-action: manipulation; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen overflow-hidden flex flex-col selection:bg-yellow-500 selection:text-gray-900">
+
+    <header class="bg-gray-800 p-4 shadow-md border-b border-gray-700 flex justify-between items-center z-10">
+        <h1 class="text-xl font-bold text-yellow-500 truncate" id="header-title">ورزشکاران</h1>
+        <button id="back-btn" class="hidden text-gray-300 hover:text-white bg-gray-700 px-3 py-1.5 rounded-md text-sm transition-colors" onclick="goBack()">برگشت 🔙</button>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 w-full max-w-md mx-auto" id="main-content">
+        <div id="list-container" class="space-y-3 pb-20"></div>
+    </main>
+
+    <footer class="bg-gray-800 p-4 border-t border-gray-700 fixed bottom-0 w-full">
+        <div class="max-w-md mx-auto flex gap-2">
+            <input type="text" id="new-item-input" class="flex-1 bg-gray-700 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-yellow-500 border border-gray-600 transition-all placeholder-gray-400" placeholder="نام را وارد کنید...">
+            <button onclick="addItem()" class="bg-yellow-600 hover:bg-yellow-500 text-white px-5 py-2 rounded-lg font-bold transition-colors shadow-lg">➕</button>
+        </div>
+    </footer>
+
+    <script>
+        // --- 1. ثبت Service Worker برای قابلیت آفلاین PWA ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    console.log('✅ Service Worker Registered', reg);
+                }).catch(err => console.error('❌ SW Registration failed', err));
+            });
+        }
+
+        // --- 2. منطق اصلی برنامه ---
+        let db = JSON.parse(localStorage.getItem('gymDB')) || [];
+        let currentUserIndex = null;
+        let currentDayIndex = null;
+
+        function saveData() {
+            localStorage.setItem('gymDB', JSON.stringify(db));
+        }
+
+        function render() {
+            const container = document.getElementById('list-container');
+            const title = document.getElementById('header-title');
+            const backBtn = document.getElementById('back-btn');
+            const input = document.getElementById('new-item-input');
+            container.innerHTML = '';
+
+            if (currentUserIndex === null) {
+                title.innerText = 'لیست ورزشکاران';
+                input.placeholder = 'نام ورزشکار جدید...';
+                backBtn.classList.add('hidden');
+                
+                if (db.length === 0) container.innerHTML = '<p class="text-center text-gray-500 mt-10">ورزشکاری ثبت نشده است.</p>';
+
+                db.forEach((user, index) => {
+                    container.innerHTML += `
+                        <div onclick="openUser(${index})" class="bg-gray-800 p-4 rounded-xl cursor-pointer hover:bg-gray-750 border border-gray-700 hover:border-yellow-500 transition-all flex justify-between items-center shadow-sm">
+                            <span class="font-bold text-lg">${user.name}</span>
+                            <button onclick="deleteItem(event, 'user', ${index})" class="text-red-400 hover:bg-red-900/30 p-2 rounded-md transition-colors">🗑️</button>
+                        </div>
+                    `;
+                });
+            } 
+            else if (currentDayIndex === null) {
+                title.innerText = db[currentUserIndex].name;
+                input.placeholder = 'نام روز (مثلا: شنبه)...';
+                backBtn.classList.remove('hidden');
+
+                if (db[currentUserIndex].days.length === 0) container.innerHTML = '<p class="text-center text-gray-500 mt-10">روزی ثبت نشده است.</p>';
+
+                db[currentUserIndex].days.forEach((day, index) => {
+                    container.innerHTML += `
+                        <div onclick="openDay(${index})" class="bg-gray-800 p-4 rounded-xl cursor-pointer hover:bg-gray-750 border-r-4 border-yellow-500 flex justify-between items-center shadow-sm">
+                            <span class="font-bold text-gray-100">${day.name}</span>
+                            <button onclick="deleteItem(event, 'day', ${index})" class="text-red-400 hover:bg-red-900/30 p-2 rounded-md">🗑️</button>
+                        </div>
+                    `;
+                });
+            } 
+            else {
+                title.innerText = db[currentUserIndex].days[currentDayIndex].name;
+                input.placeholder = 'نام حرکت (مثلا: پرس سینه)...';
+                backBtn.classList.remove('hidden');
+
+                if (db[currentUserIndex].days[currentDayIndex].exercises.length === 0) container.innerHTML = '<p class="text-center text-gray-500 mt-10">تمرینی ثبت نشده است.</p>';
+
+                db[currentUserIndex].days[currentDayIndex].exercises.forEach((ex, index) => {
+                    container.innerHTML += `
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-sm mb-3">
+                            <div class="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
+                                <span class="font-bold text-yellow-400 text-lg">${ex.name}</span>
+                                <button onclick="deleteItem(event, 'exercise', ${index})" class="text-red-400 text-sm hover:underline">حذف</button>
+                            </div>
+                            <div class="flex justify-around text-sm text-gray-300">
+                                <div class="flex flex-col items-center">
+                                    <label class="mb-1 text-xs text-gray-500">ست</label>
+                                    <input type="number" value="${ex.sets}" onchange="updateEx(${index}, 'sets', this.value)" class="w-16 bg-gray-900 text-yellow-500 font-bold text-center rounded py-1 border border-gray-600 focus:border-yellow-500 outline-none">
+                                </div>
+                                <div class="flex flex-col items-center">
+                                    <label class="mb-1 text-xs text-gray-500">تکرار</label>
+                                    <input type="number" value="${ex.reps}" onchange="updateEx(${index}, 'reps', this.value)" class="w-16 bg-gray-900 text-yellow-500 font-bold text-center rounded py-1 border border-gray-600 focus:border-yellow-500 outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function openUser(index) { currentUserIndex = index; render(); }
+        function openDay(index) { currentDayIndex = index; render(); }
+        function goBack() {
+            if (currentDayIndex !== null) currentDayIndex = null;
+            else if (currentUserIndex !== null) currentUserIndex = null;
+            render();
+        }
+
+        function addItem() {
+            const input = document.getElementById('new-item-input');
+            const val = input.value.trim();
+            if (!val) return;
+
+            if (currentUserIndex === null) {
+                db.push({ name: val, days: [] });
+            } else if (currentDayIndex === null) {
+                db[currentUserIndex].days.push({ name: val, exercises: [] });
+            } else {
+                db[currentUserIndex].days[currentDayIndex].exercises.push({ name: val, sets: 3, reps: 10 });
+            }
+
+            input.value = '';
+            saveData();
+            render();
+            
+            // اسکرول به پایین بعد از اضافه کردن
+            setTimeout(() => {
+                const main = document.getElementById('main-content');
+                main.scrollTop = main.scrollHeight;
+            }, 50);
+        }
+
+        function updateEx(exIndex, field, value) {
+            db[currentUserIndex].days[currentDayIndex].exercises[exIndex][field] = Number(value);
+            saveData();
+        }
+
+        function deleteItem(event, type, index) {
+            event.stopPropagation();
+            if (!confirm('آیا از حذف اطمینان دارید؟')) return;
+
+            if (type === 'user') db.splice(index, 1);
+            else if (type === 'day') db[currentUserIndex].days.splice(index, 1);
+            else if (type === 'exercise') db[currentUserIndex].days[currentDayIndex].exercises.splice(index, 1);
+            
+            saveData();
+            render();
+        }
+
+        // پشتیبانی از دکمه Enter برای کیبورد گوشی
+        document.getElementById('new-item-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') addItem();
+        });
+
+        render();
+    </script>
+</body>
+</html>
